@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Buzzer</title>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+:root{--bg:#f6f5f1;--fg:#1d1d1b;--card:#fff;--mut:#6b6a64;--line:#e2e0d8;--acc:#d6322e;--ok:#1f8a4c;--gold:#f2b705}
+@media (prefers-color-scheme:dark){:root{--bg:#141413;--fg:#f1efe8;--card:#201f1d;--mut:#a3a199;--line:#34332f;--acc:#ef4a45;--ok:#3cc47c}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:560px;margin:0 auto;padding:14px;padding-top:max(14px,env(safe-area-inset-top));padding-bottom:max(24px,env(safe-area-inset-bottom));display:grid;gap:12px}
+h1{font-size:22px;margin:0}
+h2{font-size:14px;margin:0 0 8px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
+input{width:100%;padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--fg);font-size:16px;margin-bottom:8px}
+button{font:inherit;cursor:pointer;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--fg);padding:11px 14px}
+button.primary{background:var(--fg);color:var(--bg);border-color:var(--fg);width:100%}
+button.link{border:none;background:none;color:var(--mut);text-decoration:underline}
+button:disabled{opacity:.45}
+.code{font-size:44px;font-weight:800;letter-spacing:.14em;text-align:center;margin:4px 0}
+.badge{font-size:13px;padding:4px 10px;border-radius:99px;border:1px solid var(--line);white-space:nowrap}
+.badge.open{color:var(--ok);border-color:var(--ok)}
+.bar{display:flex;gap:8px;align-items:center}.bar .primary{flex:2;width:auto}.bar button{flex:1}
+.buzz{display:block;margin:10px auto;width:min(74vw,270px);aspect-ratio:1;border-radius:50%;border:none;background:var(--acc);color:#fff;font-size:36px;font-weight:800;letter-spacing:.04em;box-shadow:0 8px 0 rgba(0,0,0,.28);touch-action:manipulation;transition:transform .05s,box-shadow .05s}
+.buzz.down:not(:disabled){transform:translateY(6px);box-shadow:0 2px 0 rgba(0,0,0,.28)}
+.buzz:disabled{background:var(--mut);opacity:.5}
+.who{text-align:center;color:var(--mut)}.msg{text-align:center;min-height:24px}
+.err{color:var(--acc);text-align:center;font-size:14px;min-height:18px}
+.row{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line)}
+.row:first-of-type{border-top:none}
+.rank{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--bg);font-weight:700;font-size:14px;flex:none}
+.row.first .rank{background:var(--gold);color:#1d1d1b}
+.grow{flex:1;min-width:0}.grow b,.grow small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+small{color:var(--mut)}
+.pts{font-weight:800;font-size:20px;min-width:34px;text-align:right}
+.mini{padding:6px 12px;font-weight:700}
+.step{display:flex;gap:8px;align-items:center;margin-top:8px}.step input{width:80px;margin:0}
+.empty{color:var(--mut);text-align:center;padding:6px 0}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+  <div id="err" class="err"></div>
+
+  <section id="home" class="card">
+    <h1>🔔 Buzzer</h1>
+    <p style="color:var(--mut)">Chaque joueur utilise son propre téléphone. Une personne crée la partie (admin), les autres la rejoignent avec le code.</p>
+    <button id="goHost" class="primary" style="margin-bottom:8px">Créer une partie (admin)</button>
+    <button id="goJoin" class="primary">Rejoindre une partie</button>
+  </section>
+
+  <section id="join" class="card" hidden>
+    <h2>Code de la partie</h2>
+    <input id="codeIn" maxlength="4" placeholder="ABCD" autocapitalize="characters" autocomplete="off" style="text-transform:uppercase;text-align:center;font-size:28px;letter-spacing:.2em">
+    <button id="connect" class="primary">Se connecter</button>
+  </section>
+
+  <section id="reg" class="card" hidden>
+    <h2>Inscription</h2>
+    <input id="pseudo" maxlength="16" placeholder="Ton pseudo" autocomplete="off">
+    <input id="team" list="teams" maxlength="20" placeholder="Ton équipe" autocomplete="off">
+    <datalist id="teams"></datalist>
+    <button id="enter" class="primary">Entrer dans la partie</button>
+  </section>
+
+  <section id="play" hidden>
+    <div class="card">
+      <div class="who" id="who"></div>
+      <button id="buzz" class="buzz">BUZZ</button>
+      <div class="msg" id="pmsg"></div>
+    </div>
+  </section>
+
+  <section id="host" hidden>
+    <div class="card" style="text-align:center">
+      <h2>Code à donner aux joueurs</h2>
+      <div class="code" id="hcode">…</div>
+      <small id="hcount"></small>
+    </div>
+    <div class="card"><div class="bar">
+      <button id="newRound" class="primary">Nouvelle manche</button>
+      <button id="toggle">Fermer</button>
+    </div></div>
+  </section>
+
+  <section id="shared" hidden style="display:grid;gap:12px">
+    <div class="card"><div class="bar" style="justify-content:space-between"><h2 style="margin:0">Ordre d’appui</h2><span id="badge" class="badge"></span></div><div id="order" style="margin-top:6px"></div></div>
+    <div class="card"><h2>Scores</h2><div id="scores"></div>
+      <div id="stepBox" class="step" hidden><span>Points :</span><input id="pts" type="number" value="1" min="1" step="1" inputmode="numeric"></div>
+    </div>
+    <div class="card" id="plBox" hidden><h2>Joueurs connectés</h2><div id="plist"></div></div>
+  </section>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const ALPHA = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+let role = null, peer = null, conn = null, actx = null, view = null;
+let G = {round: 1, open: false, scores: {}, order: []};   // état maître (admin)
+const conns = new Map(), P = new Map();                   // admin : connexions et joueurs
+let myId = null, myName = "", myTeam = "";
+
+function esc(s){ const d = document.createElement("div"); d.textContent = s == null ? "" : String(s); return d.innerHTML; }
+function err(t){ $("err").textContent = t || ""; }
+function show(...ids){ ["home","join","reg","play","host","shared"].forEach(i => $(i).hidden = !ids.includes(i)); }
+function beep(){
+  try{
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.type = "square"; o.frequency.value = 660; g.gain.value = .15;
+    o.connect(g); g.connect(actx.destination); o.start(); o.stop(actx.currentTime + .18);
+  }catch(e){}
+}
+function needPeer(){ if(typeof Peer === "undefined"){ err("Connexion internet requise (bibliothèque PeerJS non chargée)."); return false; } return true; }
+
+/* ================= ADMIN ================= */
+function teamList(){
+  const m = new Map();
+  P.forEach(p => m.set(p.team.toLowerCase(), p.team));
+  Object.keys(G.scores).forEach(t => m.set(t.toLowerCase(), t));
+  return [...m.values()];
+}
+function snap(){
+  const f = G.order.length ? G.order[0].at : 0;
+  return {type: "state", round: G.round, open: G.open, scores: G.scores, teams: teamList(), count: P.size,
+    order: G.order.map(o => ({id: o.id, name: o.name, team: o.team, ms: Math.round(o.at - f)}))};
+}
+function broadcast(){
+  const s = snap();
+  conns.forEach(c => { try{ if(c.open) c.send(s); }catch(e){} });
+  view = s; render();
+}
+function startHost(){
+  if(!needPeer()) return;
+  role = "host"; err("");
+  try{ G.scores = JSON.parse(localStorage.getItem("buzzer-scores") || "{}"); }catch(e){}
+  const code = Array.from({length: 4}, () => ALPHA[Math.floor(Math.random() * ALPHA.length)]).join("");
+  peer = new Peer("buzzer-" + code);
+  show("host", "shared");
+  $("hcode").textContent = "…";
+  peer.on("open", () => { $("hcode").textContent = code; broadcast(); });
+  peer.on("error", e => {
+    if(e.type === "unavailable-id"){ peer.destroy(); startHost(); }
+    else err("Erreur de connexion (" + e.type + "). Vérifie ta connexion internet.");
+  });
+  peer.on("connection", c => {
+    c.on("open", () => { conns.set(c.peer, c); c.send(snap()); });
+    c.on("data", d => onHostData(c, d));
+    c.on("close", () => { conns.delete(c.peer); P.delete(c.peer); broadcast(); });
+  });
+  try{ if(navigator.wakeLock) navigator.wakeLock.request("screen").catch(() => {}); }catch(e){}
+}
+function onHostData(c, d){
+  if(!d || typeof d !== "object") return;
+  if(d.type === "join"){
+    const name = String(d.name || "").trim().slice(0, 16), team = String(d.team || "").trim().slice(0, 20);
+    if(!name || !team) return;
+    const known = teamList().find(t => t.toLowerCase() === team.toLowerCase());
+    const tm = known || team;
+    P.set(c.peer, {name, team: tm});
+    if(!(tm in G.scores)) G.scores[tm] = 0;
+    G.order.forEach(o => { if(o.id === c.peer){ o.name = name; o.team = tm; } });
+    persist(); broadcast();
+  }else if(d.type === "buzz"){
+    const p = P.get(c.peer);
+    if(!G.open || !p || G.order.some(o => o.id === c.peer)) return;
+    G.order.push({id: c.peer, name: p.name, team: p.team, at: performance.now()});
+    if(G.order.length === 1) beep();
+    broadcast();
+  }
+}
+function persist(){ try{ localStorage.setItem("buzzer-scores", JSON.stringify(G.scores)); }catch(e){} }
+$("newRound").onclick = () => { if(G.order.length || G.open) G.round++; G.order = []; G.open = true; broadcast(); };
+$("toggle").onclick = () => { G.open = !G.open; broadcast(); };
+function pts(){ return Math.max(1, parseInt($("pts").value, 10) || 1); }
+function addPts(t, n){ G.scores[t] = (G.scores[t] || 0) + n; persist(); broadcast(); }
+
+/* ================= JOUEUR ================= */
+function connect(){
+  if(!needPeer()) return;
+  const code = $("codeIn").value.trim().toUpperCase();
+  if(code.length !== 4){ err("Le code a 4 caractères."); return; }
+  err(""); $("connect").disabled = true; $("connect").textContent = "Connexion…";
+  peer = new Peer();
+  peer.on("open", id => {
+    myId = id;
+    conn = peer.connect("buzzer-" + code, {reliable: true});
+    conn.on("open", () => { role = "player"; show("reg"); });
+    conn.on("data", d => { if(d && d.type === "state"){ view = d; $("teams").innerHTML = d.teams.map(t => '<option value="' + esc(t) + '">').join(""); render(); } });
+    conn.on("close", () => { err("Connexion perdue. Recharge la page pour rejoindre à nouveau."); $("buzz").disabled = true; });
+  });
+  peer.on("error", e => {
+    $("connect").disabled = false; $("connect").textContent = "Se connecter";
+    err(e.type === "peer-unavailable" ? "Code introuvable : vérifie-le avec l’admin." : "Erreur de connexion (" + e.type + ").");
+  });
+}
+function enter(){
+  const n = $("pseudo").value.trim(), t = $("team").value.trim();
+  if(!n || !t){ err("Renseigne un pseudo et une équipe."); return; }
+  myName = n; myTeam = t; err("");
+  conn.send({type: "join", name: n, team: t});
+  show("play", "shared"); render();
+}
+function doBuzz(){
+  if(!conn || !view || !view.open || view.order.some(o => o.id === myId)) return;
+  if(navigator.vibrate) navigator.vibrate(30);
+  conn.send({type: "buzz"});
+}
+
+/* ================= AFFICHAGE ================= */
+function render(){
+  if(!view) return;
+  const adm = role === "host";
+  $("badge").textContent = "Manche " + view.round + (view.open ? " · ouvert" : " · fermé");
+  $("badge").className = "badge" + (view.open ? " open" : "");
+  $("toggle").textContent = view.open ? "Fermer" : "Ouvrir";
+  $("hcount").textContent = view.count + " joueur(s) connecté(s)";
+  $("stepBox").hidden = !adm; $("plBox").hidden = !adm;
+
+  $("order").innerHTML = view.order.length ? view.order.map((o, i) =>
+    '<div class="row' + (i === 0 ? " first" : "") + '"><div class="rank">' + (i + 1) + '</div><div class="grow"><b>' + esc(o.name) + "</b><small>" + esc(o.team) + "</small></div><small>" +
+    (i === 0 ? "premier" : "+" + o.ms + " ms") + "</small>" + (adm ? '<button class="mini" data-t="' + esc(o.team) + '" data-s="0">+</button>' : "") + "</div>").join("")
+    : '<div class="empty">' + (view.open ? "Personne n’a encore buzzé" : "Aucun appui pour cette manche") + "</div>";
+
+  const ts = Object.keys(view.scores).sort((a, b) => view.scores[b] - view.scores[a] || a.localeCompare(b));
+  $("scores").innerHTML = ts.length ? ts.map(t =>
+    '<div class="row"><div class="grow"><b>' + esc(t) + "</b></div>" + (adm ? '<button class="mini" data-t="' + esc(t) + '" data-s="-1">−</button>' : "") +
+    '<div class="pts">' + view.scores[t] + "</div>" + (adm ? '<button class="mini" data-t="' + esc(t) + '" data-s="1">+</button>' : "") + "</div>").join("")
+    : '<div class="empty">Aucune équipe pour l’instant</div>';
+
+  if(adm){
+    $("plist").innerHTML = P.size ? [...P.entries()].map(([id, p]) =>
+      '<div class="row"><div class="grow"><b>' + esc(p.name) + "</b><small>" + esc(p.team) + '</small></div><button class="mini" data-kick="' + esc(id) + '">✕</button></div>').join("")
+      : '<div class="empty">Personne pour l’instant</div>';
+  }
+  if(role === "player"){
+    const idx = view.order.findIndex(o => o.id === myId);
+    $("who").textContent = myName + " · " + myTeam;
+    $("buzz").disabled = !view.open || idx >= 0;
+    $("buzz").textContent = idx >= 0 ? "✓" : (view.open ? "BUZZ" : "Fermé");
+    $("pmsg").textContent = idx >= 0 ? "Tu es en position " + (idx + 1) + (idx === 0 ? " 🎉" : "") : (view.open ? "À toi de jouer !" : "En attente de l’admin…");
+  }
+}
+
+/* ================= ÉVÉNEMENTS ================= */
+$("goHost").onclick = startHost;
+$("goJoin").onclick = () => show("join");
+$("connect").onclick = connect;
+$("codeIn").addEventListener("keydown", e => { if(e.key === "Enter") connect(); });
+$("enter").onclick = enter;
+$("team").addEventListener("keydown", e => { if(e.key === "Enter") enter(); });
+$("buzz").addEventListener("pointerdown", e => { e.preventDefault(); $("buzz").classList.add("down"); doBuzz(); });
+["pointerup", "pointercancel", "pointerleave"].forEach(ev => $("buzz").addEventListener(ev, () => $("buzz").classList.remove("down")));
+$("shared").addEventListener("click", e => {
+  const b = e.target.closest("button"); if(!b || role !== "host") return;
+  if(b.dataset.kick){ const c = conns.get(b.dataset.kick); P.delete(b.dataset.kick); if(c) c.close(); conns.delete(b.dataset.kick); broadcast(); }
+  else if(b.dataset.t){ addPts(b.dataset.t, b.dataset.s === "0" ? pts() : pts() * parseInt(b.dataset.s, 10)); }
+});
+show("home");
+</script>
+</body>
+</html>
